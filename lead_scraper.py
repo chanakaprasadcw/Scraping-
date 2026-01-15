@@ -4,6 +4,7 @@ import time
 from typing import List, Dict, Optional
 from config import Config
 from utils.web_scraper import WebScraper
+from utils.nlp_extractor import NLPExtractor
 from scrapers.search_scraper import SearchScraper
 from scrapers.linkedin_scraper import LinkedInScraper
 from scrapers.profile_scraper import ProfileScraper
@@ -182,6 +183,78 @@ class LeadScraper:
         else:
             print("Please provide either names or company in criteria")
             return []
+
+    def search_leads_natural_language(self, query: str, limit: int = 10) -> List[Dict]:
+        """
+        Search for leads using natural language query.
+
+        Args:
+            query: Natural language search query
+                   Example: "Find startup founders in San Francisco with 2-5 team members"
+            limit: Maximum number of leads to find
+
+        Returns:
+            List of lead data
+        """
+        print("\n🤖 Processing natural language query...")
+        print(f"Query: \"{query}\"\n")
+
+        # Extract criteria from natural language
+        criteria = NLPExtractor.extract_criteria(query)
+
+        # Print extracted criteria
+        print(NLPExtractor.format_criteria_summary(criteria))
+
+        # Generate search queries
+        search_queries = NLPExtractor.generate_search_queries(criteria)
+
+        print(f"\n🔍 Generated {len(search_queries)} search queries:")
+        for i, q in enumerate(search_queries, 1):
+            print(f"  {i}. {q}")
+
+        # Perform searches
+        all_results = []
+
+        for search_query in search_queries[:3]:  # Limit to 3 queries
+            print(f"\n🔎 Searching: {search_query}")
+
+            results = self.search_scraper.google_search(search_query, num_results=limit)
+            all_results.extend(results)
+
+            # Brief delay between searches
+            time.sleep(self.config.DELAY_BETWEEN_REQUESTS)
+
+        # Filter to LinkedIn profiles
+        linkedin_profiles = []
+        for result in all_results:
+            if 'linkedin.com/in/' in result['url']:
+                linkedin_profiles.append(result)
+
+        # Remove duplicates
+        unique_profiles = {p['url']: p for p in linkedin_profiles}.values()
+
+        print(f"\n✅ Found {len(unique_profiles)} unique LinkedIn profiles")
+
+        # Scrape each profile
+        for profile in list(unique_profiles)[:limit]:
+            print(f"\n📊 Scraping: {profile['title']}")
+
+            lead_data = self.linkedin_scraper.scrape_profile(profile['url'])
+
+            # Add search context
+            lead_data['search_query'] = query
+            lead_data['matched_criteria'] = {
+                'positions': criteria.get('positions', []),
+                'company_type': criteria.get('company_type'),
+                'industry': criteria.get('industry')
+            }
+
+            self.leads.append(lead_data)
+
+            # Delay between profile scrapes
+            time.sleep(self.config.DELAY_BETWEEN_REQUESTS)
+
+        return self.leads
 
     def export_leads(self, format: str = 'csv', filename: str = 'leads') -> str:
         """

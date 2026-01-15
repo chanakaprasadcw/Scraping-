@@ -11,10 +11,11 @@ A powerful Python-based web scraping tool to find leads on the internet without 
 
 ## Features
 
+🤖 **NEW! Natural Language Search** - Describe what you're looking for in plain English
 ✨ **No API Required** - Pure web scraping, no API keys or subscriptions needed
 🔍 **Multi-Source Search** - Google search, LinkedIn, personal websites
 📊 **Multiple Export Formats** - CSV, JSON, Excel
-🤖 **Automated Extraction** - Email validation, profile parsing, contact information
+🎯 **Smart Keyword Extraction** - Automatically extracts criteria from natural text
 ⚡ **Flexible Search** - Search by name, company, job title, or combinations
 🛡️ **Anti-Detection** - Rotating user agents, delays, headless browser
 
@@ -46,6 +47,32 @@ cp .env.example .env
 4. (Optional) Edit `.env` file to customize settings
 
 ## Quick Start
+
+### 🤖 Natural Language Search (NEW!)
+
+Simply describe what you're looking for in plain English:
+
+```bash
+# Find startup founders
+python main.py --query "Find startup founders in San Francisco with 2-5 team members"
+
+# Search for executives
+python main.py --query "Tech CEOs at companies founded in last 2 years"
+
+# Find specific roles
+python main.py --query "VPs and Directors at fintech startups in New York"
+
+# Export to Excel
+python main.py --query "Engineering leads at cloud computing companies" --format excel
+```
+
+The system automatically:
+- Extracts job titles (CEO, CTO, VP, Founder, etc.)
+- Identifies company types (startup, enterprise, SaaS, fintech, etc.)
+- Detects locations (San Francisco, New York, Austin, etc.)
+- Understands team sizes (2-5 members, 10-20 people, etc.)
+- Recognizes founding dates (founded in last 2 years, since 2024, etc.)
+- Generates optimized search queries
 
 ### Command Line Usage
 

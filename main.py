@@ -26,10 +26,14 @@ from data_exporter import DataExporter
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Internet Lead Scraping Tool',
+        description='Internet Lead Scraping Tool with Natural Language Search',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Natural language search (NEW!)
+  python main.py --query "Find startup founders in San Francisco with 2-5 team members"
+  python main.py --query "Tech CEOs at companies founded in last 2 years"
+
   # Search for specific people
   python main.py --names "John Doe,Jane Smith" --company "Google"
 
@@ -40,9 +44,12 @@ Examples:
   python main.py --config config.json
 
   # Export to different formats
-  python main.py --names "John Doe" --format excel --output my_leads
+  python main.py --query "VPs at fintech startups" --format excel --output fintech_vps
         """
     )
+
+    # Natural language search
+    parser.add_argument('--query', type=str, help='Natural language search query (e.g., "Find startup founders in SF")')
 
     # Search options
     parser.add_argument('--names', type=str, help='Comma-separated list of names to search')
@@ -81,41 +88,49 @@ def main():
     """Main application entry point."""
     args = parse_arguments()
 
-    print("=" * 60)
+    print("=" * 70)
     print("🔍 Lead Scraping Tool - Internet Search & Contact Finder")
-    print("=" * 60)
-
-    # Determine search criteria
-    criteria = {}
-
-    if args.config:
-        print(f"\n📄 Loading search criteria from: {args.config}")
-        criteria = load_config_file(args.config)
-    else:
-        # Build criteria from command line arguments
-        if args.names:
-            criteria['names'] = [name.strip() for name in args.names.split(',')]
-
-        if args.company:
-            criteria['company'] = args.company
-
-        if args.titles:
-            criteria['titles'] = [title.strip() for title in args.titles.split(',')]
-
-        criteria['limit'] = args.limit
-
-    if not criteria:
-        print("\n❌ Error: No search criteria provided.")
-        print("Use --names, --company, --titles, or --config to specify what to search.\n")
-        sys.exit(1)
-
-    print("\n📋 Search Criteria:")
-    print(json.dumps(criteria, indent=2))
+    print("=" * 70)
 
     # Create and run lead scraper
     with LeadScraper(headless=args.headless) as scraper:
-        # Perform search
-        leads = scraper.search_leads_by_criteria(criteria)
+        # Check for natural language query first
+        if args.query:
+            print("\n🤖 Using Natural Language Search Mode")
+            leads = scraper.search_leads_natural_language(args.query, limit=args.limit)
+
+        # Otherwise, use structured search
+        else:
+            # Determine search criteria
+            criteria = {}
+
+            if args.config:
+                print(f"\n📄 Loading search criteria from: {args.config}")
+                criteria = load_config_file(args.config)
+            else:
+                # Build criteria from command line arguments
+                if args.names:
+                    criteria['names'] = [name.strip() for name in args.names.split(',')]
+
+                if args.company:
+                    criteria['company'] = args.company
+
+                if args.titles:
+                    criteria['titles'] = [title.strip() for title in args.titles.split(',')]
+
+                criteria['limit'] = args.limit
+
+            if not criteria:
+                print("\n❌ Error: No search criteria provided.")
+                print("Use --query for natural language search, or")
+                print("Use --names, --company, --titles, or --config for structured search.\n")
+                sys.exit(1)
+
+            print("\n📋 Search Criteria:")
+            print(json.dumps(criteria, indent=2))
+
+            # Perform search
+            leads = scraper.search_leads_by_criteria(criteria)
 
         if not leads:
             print("\n❌ No leads found.")
