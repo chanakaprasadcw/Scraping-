@@ -1,5 +1,6 @@
 """Web scraping utilities using Selenium and BeautifulSoup."""
 
+import os
 import time
 import random
 from typing import Optional, Dict, List
@@ -18,37 +19,94 @@ from fake_useragent import UserAgent
 class WebScraper:
     """Web scraping utility class."""
 
-    def __init__(self, headless: bool = True, timeout: int = 30):
+    def __init__(
+        self,
+        headless: bool = False,
+        timeout: int = 30,
+        use_selenium: bool = True,
+        chrome_profile_path: Optional[str] = None,
+        window_size: tuple = (1280, 900)
+    ):
         """
         Initialize web scraper.
 
         Args:
-            headless: Run browser in headless mode
+            headless: Run browser in headless mode (default: False for visible browser)
             timeout: Page load timeout in seconds
+            use_selenium: Whether to use Selenium (default: True)
+            chrome_profile_path: Path to Chrome user profile for persistent sessions
+            window_size: Browser window size (width, height)
         """
         self.headless = headless
         self.timeout = timeout
+        self.use_selenium = use_selenium
+        self.chrome_profile_path = chrome_profile_path
+        self.window_size = window_size
         self.driver: Optional[webdriver.Chrome] = None
         self.ua = UserAgent()
 
     def init_driver(self):
-        """Initialize Selenium WebDriver."""
+        """Initialize Selenium WebDriver with visible browser."""
         if self.driver:
             return
 
         chrome_options = Options()
-        if self.headless:
-            chrome_options.add_argument('--headless')
 
+        # Headless mode - OFF by default for visible automation
+        if self.headless:
+            chrome_options.add_argument('--headless=new')
+
+        # Use Chrome profile for persistent login
+        if self.chrome_profile_path:
+            chrome_options.add_argument(f'--user-data-dir={self.chrome_profile_path}')
+        else:
+            # Create a default profile directory for session persistence
+            default_profile = os.path.join(os.path.expanduser('~'), '.comment_bot_chrome_profile')
+            if not os.path.exists(default_profile):
+                os.makedirs(default_profile)
+            chrome_options.add_argument(f'--user-data-dir={default_profile}')
+
+        # Essential options
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
+
+        # Anti-detection settings
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument(f'user-agent={self.ua.random}')
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+
+        # Window size
+        chrome_options.add_argument(f'--window-size={self.window_size[0]},{self.window_size[1]}')
+
+        # Start maximized for better visibility
+        chrome_options.add_argument('--start-maximized')
+
+        # Disable infobars
+        chrome_options.add_argument('--disable-infobars')
+
+        # Set user agent
+        chrome_options.add_argument(f'user-agent={self.ua.chrome}')
+
+        # Suppress logging
         chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
         service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
         self.driver.set_page_load_timeout(self.timeout)
+
+        # Additional anti-detection via JavaScript
+        self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': '''
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            '''
+        })
+
+    def get_driver(self):
+        """Get the Selenium WebDriver instance."""
+        self.init_driver()
+        return self.driver
 
     def get_page_source(self, url: str, wait_for_element: Optional[str] = None) -> str:
         """

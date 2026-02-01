@@ -25,6 +25,12 @@ class Config:
     LINKEDIN_EMAIL = os.getenv('LINKEDIN_EMAIL', '')
     LINKEDIN_PASSWORD = os.getenv('LINKEDIN_PASSWORD', '')
 
+    # Comment Bot settings
+    COMMENT_STYLE = os.getenv('COMMENT_STYLE', 'professional')
+    MAX_COMMENTS_PER_SESSION = int(os.getenv('MAX_COMMENTS_PER_SESSION', '10'))
+    MIN_DELAY_BETWEEN_COMMENTS = int(os.getenv('MIN_DELAY_BETWEEN_COMMENTS', '120'))
+    MAX_DELAY_BETWEEN_COMMENTS = int(os.getenv('MAX_DELAY_BETWEEN_COMMENTS', '300'))
+
     # User agents
     USER_AGENTS = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
