@@ -1,0 +1,13 @@
+{
+  "email": "",
+  "password": "",
+  "industry": "technology",
+  "location": null,
+  "keywords": null,
+  "max_connections": 5,
+  "max_comments": 10,
+  "posts_per_connection": 2,
+  "style": "professional",
+  "headless": false,
+  "delay_between_comments": [60, 180]
+}
