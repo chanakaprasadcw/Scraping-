@@ -35,7 +35,7 @@ class ConnectionScraper:
 
     def login(self, email: str, password: str) -> bool:
         """
-        Login to LinkedIn.
+        Login to LinkedIn automatically.
 
         Args:
             email: LinkedIn email
@@ -80,6 +80,119 @@ class ConnectionScraper:
 
         except Exception as e:
             print(f"Login failed: {str(e)}")
+            return False
+
+    def wait_for_manual_login(self, timeout: int = 300) -> bool:
+        """
+        Wait for user to manually login to LinkedIn.
+        Opens LinkedIn and waits for user to complete login.
+
+        Args:
+            timeout: Maximum seconds to wait for login (default: 5 minutes)
+
+        Returns:
+            True if login detected, False if timeout
+        """
+        driver = self._get_driver()
+
+        print("\n" + "="*60)
+        print("MANUAL LOGIN REQUIRED")
+        print("="*60)
+        print("\nThe browser will open LinkedIn login page.")
+        print("Please login manually in the browser window.")
+        print(f"Waiting up to {timeout} seconds for you to login...")
+        print("\nTips:")
+        print("  - Complete any security verification if prompted")
+        print("  - Make sure you reach the LinkedIn feed/home page")
+        print("="*60 + "\n")
+
+        try:
+            # Navigate to LinkedIn
+            driver.get("https://www.linkedin.com/login")
+            time.sleep(2)
+
+            # Wait for user to login - check every 3 seconds
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                current_url = driver.current_url
+
+                # Check if user is now on feed or any logged-in page
+                if any(page in current_url for page in ["feed", "mynetwork", "messaging", "jobs", "notifications"]):
+                    self.is_logged_in = True
+                    print("\n" + "="*60)
+                    print("LOGIN SUCCESSFUL!")
+                    print("="*60)
+                    print("Detected that you are now logged in.")
+                    print("The bot will now start working...")
+                    print("="*60 + "\n")
+                    time.sleep(2)
+                    return True
+
+                # Also check for LinkedIn home page with session
+                if "linkedin.com" in current_url and "login" not in current_url and "checkpoint" not in current_url:
+                    # Double check by looking for feed elements
+                    try:
+                        driver.find_element(By.CSS_SELECTOR, "div.feed-shared-update-v2, div.scaffold-layout")
+                        self.is_logged_in = True
+                        print("\n" + "="*60)
+                        print("LOGIN SUCCESSFUL!")
+                        print("="*60 + "\n")
+                        return True
+                    except:
+                        pass
+
+                # Show waiting message
+                elapsed = int(time.time() - start_time)
+                remaining = timeout - elapsed
+                if elapsed % 10 == 0:  # Print every 10 seconds
+                    print(f"Waiting for login... ({remaining} seconds remaining)")
+
+                time.sleep(3)
+
+            print("\n" + "="*60)
+            print("LOGIN TIMEOUT")
+            print("="*60)
+            print(f"Waited {timeout} seconds but login was not detected.")
+            print("Please try again.")
+            print("="*60 + "\n")
+            return False
+
+        except Exception as e:
+            print(f"Error during manual login wait: {str(e)}")
+            return False
+
+    def check_if_logged_in(self) -> bool:
+        """
+        Check if already logged into LinkedIn.
+
+        Returns:
+            True if logged in, False otherwise
+        """
+        driver = self._get_driver()
+
+        try:
+            driver.get("https://www.linkedin.com/feed/")
+            time.sleep(3)
+
+            current_url = driver.current_url
+            if "feed" in current_url:
+                self.is_logged_in = True
+                print("Already logged in to LinkedIn")
+                return True
+            elif "login" in current_url:
+                print("Not logged in - login required")
+                return False
+            else:
+                # Try to find feed elements
+                try:
+                    driver.find_element(By.CSS_SELECTOR, "div.feed-shared-update-v2, div.scaffold-layout")
+                    self.is_logged_in = True
+                    return True
+                except:
+                    return False
+
+        except Exception as e:
+            print(f"Error checking login status: {str(e)}")
             return False
 
     def _random_delay(self, min_sec: float = 1.0, max_sec: float = 3.0):

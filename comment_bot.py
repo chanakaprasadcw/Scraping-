@@ -1,13 +1,16 @@
 """
 LinkedIn Connection Comment Bot
 Automatically engages with connections' posts by adding relevant, human-like comments.
+
+This bot runs in VISIBLE browser mode (not headless) to work like a real person.
+You can manually login and let the bot take over.
 """
 
 import os
 import json
 import time
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
 from utils.web_scraper import WebScraper
@@ -21,33 +24,38 @@ class CommentBot:
     Bot for engaging with LinkedIn connections' posts through comments.
 
     Features:
+    - Visible Chrome browser (not headless) - works like a real person
+    - Manual login support - you login, bot takes over
+    - Continuous running mode for all-day engagement
     - Filter connections by industry or location
-    - Navigate to connections' recent posts
     - Generate and post relevant, human-like comments
+    - Smart delays to mimic human behavior
     - Track commented posts to avoid duplicates
-    - Configurable delays and limits for safety
     """
 
     def __init__(
         self,
         headless: bool = False,
         comment_style: str = "professional",
-        max_comments_per_session: int = 10,
-        delay_between_comments: tuple = (60, 180)
+        max_comments_per_session: int = 20,
+        delay_between_comments: tuple = (120, 300),
+        chrome_profile_path: Optional[str] = None
     ):
         """
         Initialize the Comment Bot.
 
         Args:
-            headless: Run browser in headless mode
+            headless: Run browser in headless mode (default: False for visible browser)
             comment_style: 'professional', 'casual', or 'enthusiastic'
             max_comments_per_session: Maximum comments to post per session
-            delay_between_comments: (min, max) seconds between comments
+            delay_between_comments: (min, max) seconds between comments (default: 2-5 minutes)
+            chrome_profile_path: Path to Chrome profile for persistent login
         """
         self.headless = headless
         self.comment_style = comment_style
         self.max_comments = max_comments_per_session
         self.delay_range = delay_between_comments
+        self.chrome_profile_path = chrome_profile_path
 
         self.web_scraper = None
         self.connection_scraper = None
@@ -56,6 +64,7 @@ class CommentBot:
         self.commented_posts = set()
         self.session_comments = 0
         self.session_log = []
+        self.is_running = False
 
         self._load_comment_history()
 
@@ -69,13 +78,19 @@ class CommentBot:
         self.close()
 
     def _initialize(self):
-        """Initialize all components."""
-        print("Initializing Comment Bot...")
+        """Initialize all components with visible browser."""
+        print("\n" + "="*60)
+        print("LINKEDIN COMMENT BOT")
+        print("="*60)
+        print("Initializing with VISIBLE Chrome browser...")
+        print("The browser will open and you can see all actions.")
+        print("="*60 + "\n")
 
-        # Initialize web scraper
+        # Initialize web scraper with visible browser
         self.web_scraper = WebScraper(
             use_selenium=True,
-            headless=self.headless
+            headless=self.headless,
+            chrome_profile_path=self.chrome_profile_path
         )
 
         # Initialize connection scraper
@@ -84,7 +99,7 @@ class CommentBot:
         # Initialize comment generator
         self.comment_generator = CommentGenerator(style=self.comment_style)
 
-        print("Comment Bot initialized successfully")
+        print("Comment Bot initialized - Chrome browser ready")
 
     def _load_comment_history(self):
         """Load previously commented posts to avoid duplicates."""
@@ -111,9 +126,22 @@ class CommentBot:
         with open(history_file, 'w') as f:
             json.dump(data, f, indent=2)
 
+    def wait_for_manual_login(self, timeout: int = 300) -> bool:
+        """
+        Wait for user to manually login to LinkedIn.
+        Opens the browser and waits for user to complete login.
+
+        Args:
+            timeout: Maximum seconds to wait (default: 5 minutes)
+
+        Returns:
+            True if login detected
+        """
+        return self.connection_scraper.wait_for_manual_login(timeout)
+
     def login(self, email: str = None, password: str = None) -> bool:
         """
-        Login to LinkedIn.
+        Login to LinkedIn automatically.
 
         Args:
             email: LinkedIn email (uses env var if not provided)
@@ -126,12 +154,20 @@ class CommentBot:
         password = password or Config.LINKEDIN_PASSWORD
 
         if not email or not password:
-            print("LinkedIn credentials not provided.")
-            print("Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in .env file")
-            print("Or provide them as arguments to login()")
+            print("\n" + "="*60)
+            print("NO CREDENTIALS PROVIDED")
+            print("="*60)
+            print("You can either:")
+            print("  1. Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in .env file")
+            print("  2. Use wait_for_manual_login() to login manually")
+            print("="*60 + "\n")
             return False
 
         return self.connection_scraper.login(email, password)
+
+    def check_login_status(self) -> bool:
+        """Check if already logged into LinkedIn (useful with Chrome profile)."""
+        return self.connection_scraper.check_if_logged_in()
 
     def get_filtered_connections(
         self,
@@ -473,6 +509,162 @@ class CommentBot:
         if results.get('errors'):
             print(f"Errors: {len(results['errors'])}")
         print(f"{'='*50}\n")
+
+    def run_continuous(
+        self,
+        industry: Optional[str] = None,
+        location: Optional[str] = None,
+        keywords: Optional[List[str]] = None,
+        comments_per_hour: int = 3,
+        run_hours: int = 8,
+        active_hours: tuple = (9, 17),
+        dry_run: bool = False
+    ) -> Dict:
+        """
+        Run the bot continuously throughout the day like a real person.
+
+        Args:
+            industry: Filter connections by industry
+            location: Filter connections by location
+            keywords: Filter connections by headline keywords
+            comments_per_hour: Target comments per hour (default: 3)
+            run_hours: Total hours to run (default: 8)
+            active_hours: Tuple of (start_hour, end_hour) for active commenting (default: 9am-5pm)
+            dry_run: If True, don't actually post comments
+
+        Returns:
+            Summary dictionary of all sessions
+        """
+        if not self.connection_scraper.is_logged_in:
+            print("Please login first!")
+            return {"error": "Not logged in"}
+
+        self.is_running = True
+        start_time = datetime.now()
+        end_time = start_time + timedelta(hours=run_hours)
+
+        total_results = {
+            "mode": "continuous",
+            "started_at": start_time.isoformat(),
+            "comments_per_hour_target": comments_per_hour,
+            "total_comments": 0,
+            "total_connections": 0,
+            "sessions": []
+        }
+
+        print("\n" + "="*60)
+        print("CONTINUOUS MODE ACTIVATED")
+        print("="*60)
+        print(f"Running for {run_hours} hours")
+        print(f"Target: ~{comments_per_hour} comments per hour")
+        print(f"Active hours: {active_hours[0]}:00 - {active_hours[1]}:00")
+        print(f"Estimated end time: {end_time.strftime('%H:%M')}")
+        print("\nPress Ctrl+C to stop at any time")
+        print("="*60 + "\n")
+
+        try:
+            while datetime.now() < end_time and self.is_running:
+                current_hour = datetime.now().hour
+
+                # Check if within active hours
+                if not (active_hours[0] <= current_hour < active_hours[1]):
+                    wait_minutes = self._minutes_until_active(active_hours[0])
+                    print(f"\nOutside active hours. Waiting {wait_minutes} minutes...")
+                    self._human_wait(wait_minutes * 60)
+                    continue
+
+                # Calculate delay for target comments per hour
+                # Spread comments randomly across the hour
+                base_delay = 3600 / comments_per_hour  # seconds between comments
+                delay_variance = base_delay * 0.4  # 40% variance
+                next_delay = random.uniform(
+                    base_delay - delay_variance,
+                    base_delay + delay_variance
+                )
+
+                # Engage with one connection
+                connections = self.get_filtered_connections(
+                    industry=industry,
+                    location=location,
+                    keywords=keywords,
+                    limit=20
+                )
+
+                if connections:
+                    # Pick a random connection
+                    connection = random.choice(connections)
+
+                    result = self._engage_with_connection(
+                        connection,
+                        max_posts=1,
+                        dry_run=dry_run
+                    )
+
+                    total_results["total_connections"] += 1
+                    total_results["total_comments"] += result["comments_added"]
+                    total_results["sessions"].append({
+                        "time": datetime.now().isoformat(),
+                        "connection": result["name"],
+                        "comments": result["comments_added"]
+                    })
+
+                    self._save_comment_history()
+
+                # Human-like wait with random variation
+                print(f"\nNext action in ~{next_delay/60:.1f} minutes...")
+                self._human_wait(next_delay)
+
+        except KeyboardInterrupt:
+            print("\n\nStopping continuous mode (Ctrl+C pressed)...")
+            self.is_running = False
+
+        total_results["ended_at"] = datetime.now().isoformat()
+        total_results["actual_duration_hours"] = (
+            datetime.now() - start_time
+        ).total_seconds() / 3600
+
+        self._save_session_log(total_results)
+        self._print_continuous_summary(total_results)
+
+        return total_results
+
+    def _minutes_until_active(self, start_hour: int) -> int:
+        """Calculate minutes until active hours begin."""
+        now = datetime.now()
+        if now.hour >= start_hour:
+            # Next day
+            target = now.replace(hour=start_hour, minute=0, second=0) + timedelta(days=1)
+        else:
+            target = now.replace(hour=start_hour, minute=0, second=0)
+        return int((target - now).total_seconds() / 60)
+
+    def _human_wait(self, seconds: float):
+        """Wait with occasional small activities to appear human."""
+        start = time.time()
+        while time.time() - start < seconds:
+            # Occasionally "do something" (scroll, move mouse simulation via small waits)
+            chunk = min(random.uniform(30, 90), seconds - (time.time() - start))
+            if chunk <= 0:
+                break
+            time.sleep(chunk)
+
+            # Periodically show we're still alive
+            remaining = seconds - (time.time() - start)
+            if remaining > 60:
+                print(f"  ... waiting ({remaining/60:.1f} min remaining)")
+
+    def _print_continuous_summary(self, results: Dict):
+        """Print continuous mode summary."""
+        print(f"\n{'='*60}")
+        print("CONTINUOUS MODE SUMMARY")
+        print(f"{'='*60}")
+        print(f"Duration: {results.get('actual_duration_hours', 0):.1f} hours")
+        print(f"Total connections engaged: {results.get('total_connections', 0)}")
+        print(f"Total comments added: {results.get('total_comments', 0)}")
+        if results.get('actual_duration_hours', 0) > 0:
+            rate = results.get('total_comments', 0) / results.get('actual_duration_hours', 1)
+            print(f"Average comments per hour: {rate:.1f}")
+        print(f"{'='*60}\n")
 
     def preview_comments(
         self,
